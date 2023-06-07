@@ -149,6 +149,7 @@ impl KrateContext {
             );
         }
 
+        log::info!("building graph... {:?}", metadata);
         let graph = gb.build_with_metadata(metadata, |filtered: krates::cm::Package| {
             let name = filtered.name;
             let vers = filtered.version;
@@ -159,6 +160,7 @@ impl KrateContext {
                 log::debug!("filtered {name} {vers}");
             }
         });
+        log::info!("graph built in {}ms", start.elapsed().as_millis());
 
         if let Ok(krates) = &graph {
             log::info!(

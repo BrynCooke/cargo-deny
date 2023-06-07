@@ -272,26 +272,26 @@ pub(crate) fn cmd(
 
     let check_advisories = args.which.is_empty()
         || args
-            .which
-            .iter()
-            .any(|w| *w == WhichCheck::Advisories || *w == WhichCheck::All);
+        .which
+        .iter()
+        .any(|w| *w == WhichCheck::Advisories || *w == WhichCheck::All);
 
     let check_bans = args.which.is_empty()
         || args
-            .which
-            .iter()
-            .any(|w| *w == WhichCheck::Bans || *w == WhichCheck::Ban || *w == WhichCheck::All);
+        .which
+        .iter()
+        .any(|w| *w == WhichCheck::Bans || *w == WhichCheck::Ban || *w == WhichCheck::All);
 
     let check_licenses = args.which.is_empty()
         || args.which.iter().any(|w| {
-            *w == WhichCheck::Licenses || *w == WhichCheck::License || *w == WhichCheck::All
-        });
+        *w == WhichCheck::Licenses || *w == WhichCheck::License || *w == WhichCheck::All
+    });
 
     let check_sources = args.which.is_empty()
         || args
-            .which
-            .iter()
-            .any(|w| *w == WhichCheck::Sources || *w == WhichCheck::All);
+        .which
+        .iter()
+        .any(|w| *w == WhichCheck::Sources || *w == WhichCheck::All);
 
     let feature_depth = args.feature_depth.or(feature_depth);
 
@@ -366,19 +366,11 @@ pub(crate) fn cmd(
         }
     };
 
+    log::info!("Loading stuff");
     rayon::scope(|s| {
-        s.spawn(|_s| {
-            let gathered = krate_ctx.gather_krates(targets, exclude);
-
-            if let Ok(krates) = &gathered {
-                krate_spans = Some(cargo_deny::diag::KrateSpans::synthesize(krates));
-            }
-
-            krates = Some(gathered);
-        });
-
         if check_advisories {
             s.spawn(|_| {
+                log::info!("Loading advisories");
                 advisory_dbs = Some(advisories::DbSet::load(
                     advisories.db_path.clone(),
                     advisories
@@ -394,14 +386,31 @@ pub(crate) fn cmd(
                         advisories::Fetch::Allow
                     },
                 ));
+                log::info!("Finished loading advisories");
             });
         }
 
         if check_licenses {
-            s.spawn(|_| license_store = Some(crate::common::load_license_store()));
+            s.spawn(|_| {
+                log::info!("Loading license store");
+                license_store = Some(crate::common::load_license_store());
+                log::info!("Finished loading license store");
+            });
         }
     });
 
+    log::info!("Loading krates");
+    let gathered = krate_ctx.gather_krates(targets, exclude);
+
+    if let Ok(krates) = &gathered {
+        krate_spans = Some(cargo_deny::diag::KrateSpans::synthesize(krates));
+    }
+
+    krates = Some(gathered);
+    log::info!("Finished loading krates");
+
+
+    log::info!("Finished loading stuff");
     let krates = krates.unwrap()?;
 
     let advisory_db_set = if check_advisories {
@@ -473,14 +482,17 @@ pub(crate) fn cmd(
 
     let colorize = log_ctx.format == crate::Format::Human
         && match log_ctx.color {
-            crate::Color::Auto => std::io::stderr().is_terminal(),
-            crate::Color::Always => true,
-            crate::Color::Never => false,
-        };
+        crate::Color::Auto => std::io::stderr().is_terminal(),
+        crate::Color::Always => true,
+        crate::Color::Never => false,
+    };
+
+    log::info!("Checking stuff");
 
     rayon::scope(|s| {
         // Asynchronously displays messages sent from the checks
         s.spawn(|_| {
+            log::info!("Printing diagnostics");
             print_diagnostics(
                 rx,
                 log_ctx,
@@ -493,6 +505,7 @@ pub(crate) fn cmd(
                 &mut stats,
                 feature_depth,
             );
+            log::info!("Finished printing diagnostics");
         });
 
         if let Some(summary) = license_summary {
